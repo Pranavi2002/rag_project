@@ -1,0 +1,45 @@
+"""
+- shows ragas, synchronous with deepeval
+- complete reasoning
+"""
+
+import asyncio
+from rag_engine import query_rag
+from deepeval_utils import evaluate_rag
+
+# In-memory cache (can also use main.answers_cache)
+# But we'll rely on main.answers_cache
+# from main import answers_cache
+
+async def ragas_generate(question: str):
+    """
+    RAGAS: Generate answer + reasoning + async DeepEval metrics
+    """
+    # Step 1: Retrieve answer and context using existing RAG
+    answer, context, relevant = await asyncio.to_thread(query_rag, question)
+
+    reasoning = None
+    if relevant:
+        # Optional: generate reasoning/explanation from RAG chunks
+        # Here we can combine context chunks into reasoning
+        reasoning = "\n".join(context)
+
+        # Schedule async metric computation
+        asyncio.create_task(compute_metrics_async(question, answer, context, reasoning))
+
+    return answer, context, reasoning, relevant
+
+async def compute_metrics_async(question, answer, context, reasoning):
+    """
+    Compute DeepEval metrics asynchronously and store in cache.
+    """
+    from main import answers_cache
+
+    try:
+        scores = await asyncio.to_thread(evaluate_rag, question, answer, context)
+        # Save metrics + reasoning in cache
+        if question in answers_cache:
+            answers_cache[question]["metrics"] = scores
+            answers_cache[question]["reasoning"] = reasoning
+    except Exception as e:
+        print(f"RAGAS metrics computation failed: {e}")
