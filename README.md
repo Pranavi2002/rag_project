@@ -33,7 +33,7 @@ rag_project/
 │   ├── package.json
 │   └── README.md
 
-````
+```
 
 ---
 
@@ -65,7 +65,7 @@ rag_project/
    python -m venv venv
    source venv/bin/activate  # macOS/Linux
    venv\Scripts\activate     # Windows
-````
+```
 
 2. Install dependencies:
 
