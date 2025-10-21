@@ -1,0 +1,201 @@
+// handles both deepeval and ragas asynchronously
+
+import React, { useState } from "react";
+import { askQuery, getMetrics, uploadFiles, removeFiles } from "./api/ragApi";
+import ChatBox from "./components/ChatBox";
+import MetricsCard from "./components/MetricsCard";
+
+function App() {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [context, setContext] = useState([]);
+  const [metrics, setMetrics] = useState(null);
+  const [reasoning, setReasoning] = useState(null);
+  const [loadingAnswer, setLoadingAnswer] = useState(false);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  const handleAsk = async (q) => {
+    setQuestion(q);
+    setAnswer("");
+    setContext([]);
+    setMetrics(null);
+    setReasoning(null);
+    setLoadingAnswer(true);
+    setLoadingMetrics(true);
+
+    try {
+      const res = await askQuery(q);
+      setAnswer(res.data.answer || "No relevant information found.");
+      setContext(res.data.context || []);
+      setReasoning(res.data.reasoning || null);
+      setLoadingAnswer(false);
+
+      // Poll for metrics
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts += 1;
+        const metricsRes = await getMetrics(q);
+        if (metricsRes.data.metrics || attempts >= 10) {
+          setMetrics(metricsRes.data.metrics || null);
+          setReasoning(metricsRes.data.reasoning || null);
+          setLoadingMetrics(false);
+          clearInterval(interval);
+        }
+      }, 2000);
+
+    } catch (err) {
+      console.error("API error:", err);
+      setAnswer("Error fetching answer.");
+      setContext([]);
+      setMetrics(null);
+      setReasoning(null);
+      setLoadingAnswer(false);
+      setLoadingMetrics(false);
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const files = event.target.files;
+    if (!files.length) return;
+
+    setUploading(true);
+    setUploadMessage("");
+
+    try {
+      const res = await uploadFiles(files);
+      setUploadMessage(`✅ Uploaded ${res.data.count} documents successfully!`);
+      setUploadedFiles((prev) => [
+        ...prev,
+        ...Array.from(files).map((f) => f.name),
+      ]);
+    } catch (err) {
+      console.error("Upload error:", err);
+      setUploadMessage("❌ Error uploading files.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveFile = async (filename) => {
+    setUploading(true);
+    setUploadMessage("");
+
+    try {
+      const res = await removeFiles([filename]);
+      setUploadMessage(res.data.status);
+      setUploadedFiles((prev) => prev.filter((f) => f !== filename));
+    } catch (err) {
+      console.error("Remove error:", err);
+      setUploadMessage("❌ Error removing file.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="p-8 max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">
+        AskMyDocs — RAG + DeepEval + RAGAS
+      </h1>
+
+      {/* File Upload Section */}
+      <div className="mb-6 p-4 border rounded-lg shadow-sm bg-gray-50">
+        <label className="block text-sm font-semibold mb-2">
+          Upload PDF or Text Files:
+        </label>
+        <input
+          type="file"
+          multiple
+          accept=".pdf,.txt"
+          onChange={handleFileUpload}
+          disabled={uploading}
+          className="block w-full text-sm border border-gray-300 rounded p-2"
+        />
+        {uploading && (
+          <p className="text-sm text-gray-600 mt-2">Uploading files...</p>
+        )}
+        {uploadMessage && <p className="text-sm mt-2">{uploadMessage}</p>}
+
+        {uploadedFiles.length > 0 && (
+          <div className="mt-3">
+            <p className="text-sm font-semibold">Uploaded Files:</p>
+            <ul className="list-disc list-inside text-sm">
+              {uploadedFiles.map((name, idx) => (
+                <li key={idx} className="flex justify-between items-center">
+                  {name}
+                  <button
+                    onClick={() => handleRemoveFile(name)}
+                    className="ml-2 text-red-500 text-sm hover:underline"
+                    disabled={uploading}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Ask Question Section */}
+      <ChatBox onAsk={handleAsk} disabled={loadingAnswer || loadingMetrics} />
+
+      {loadingAnswer && (
+        <div className="flex justify-center my-4">
+          <img
+            src="https://i.gifer.com/ZZ5H.gif"
+            alt="Loading answer..."
+            className="w-12 h-12"
+          />
+        </div>
+      )}
+
+      {question && (
+        <div className="mt-4">
+          <p>
+            <strong>Question:</strong> {question}
+          </p>
+        </div>
+      )}
+
+      {answer && (
+        <div className="mt-2">
+          <p>
+            <strong>Answer:</strong> {answer}
+          </p>
+
+          {/* Display retrieved context */}
+          {context.length > 0 && (
+            <div className="mt-2 p-2 border-l-4 border-blue-400 bg-blue-50 text-sm">
+              <p className="font-semibold">Context:</p>
+              <ul className="list-disc list-inside">
+                {context.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {loadingMetrics && (
+        <div className="flex justify-center my-2">
+          <img
+            src="https://i.gifer.com/ZZ5H.gif"
+            alt="Loading metrics..."
+            className="w-8 h-8"
+          />
+        </div>
+      )}
+
+      {(metrics || reasoning) && (
+        <MetricsCard metrics={metrics} reasoning={reasoning} />
+      )}
+    </div>
+  );
+}
+
+export default App;
