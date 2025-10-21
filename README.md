@@ -65,18 +65,20 @@ rag_project/
    python -m venv venv
    source venv/bin/activate  # macOS/Linux
    venv\Scripts\activate     # Windows
-```
+    ```
 
 2. Install dependencies:
 
    ```bash
    pip install -r backend/requirements.txt
    ```
+
 3. Create a `.env` file with your OpenAI API key:
 
    ```
    OPENAI_API_KEY=your_openai_api_key
    ```
+   
 4. Run FastAPI server:
 
    ```bash
